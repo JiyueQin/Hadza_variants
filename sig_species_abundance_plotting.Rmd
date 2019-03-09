@@ -1,0 +1,42 @@
+---
+title: "abundance_significant_plot"
+author: "JiyueQin"
+date: "March 8, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(readxl)
+theme_set(theme_bw())
+```
+
+This RMD file is to re-generate the abundance plot of speices whose abundance show sigificant cyclic pattern  across three seasons.
+
+# import data
+
+```{r import}
+abundance_data = read.table("data/filter_species_abundance_table.txt", header = TRUE) %>% 
+  mutate(species = as.character(species))
+
+significant_species = read_excel("data/significant_abundance_species_list.xlsx", col_names = FALSE) %>% 
+  select(species = X__1)
+
+sig_abundance_data = inner_join(abundance_data, significant_species, by = "species") %>% 
+  mutate(species = str_replace(species, "_", " ")) %>% 
+  mutate(season = fct_relevel(season, c("2013dry", "2014wet", "2014dry")))
+skimr::skim(sig_abundance_data)
+
+# sig_abundance_data %>% group_by(species) %>% summarize(n())
+# check join is OK, total 12 speices 
+```
+
+# plot
+
+```{r plot}
+sig_abundance_data %>% 
+  ggplot(aes(x = season, y = abundance, fill = season)) + geom_boxplot() +
+  facet_wrap(~species) + scale_y_log10() + 
+  theme(legend.position = "bottom", legend.title = element_blank()) +
+  scale_fill_discrete(labels = c("2013dry    ","2014wet    ", "2014dry")) 
+```

@@ -4,3 +4,64 @@ author: "JiyueQin"
 date: "February 25, 2019"
 output: html_document
 ---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+```
+
+# define the function to calculate
+
+```{r calculate}
+
+simu_result = function(path_simu){
+   
+    simu_list = read_table(path_simu)
+    colnames(simu_list) = c()
+    # match or mismatch
+    inner_list = inner_join(true_list, simu_list, by = c("chro","pos"))
+    if (inner_list %>% filter(ref_simu != ref )){print("error")}
+    else {
+      match = inner_list %>% filter(ref_snp == simu_snp) %>% nrow()
+      mismatch = inner_list %>% nrow() - match
+    }
+    
+    # false positive
+    fp_list = anti_join(simu_list, ture_list, by = c("chro", "pos"))
+    false_positive = fp_list %>% nrow()
+    # false negative
+    fn_list = anti_join(true_list, simu_list, by = c("chro", "pos"))
+    false_negative = fn_list %>% nrow()
+    
+    tibble(file = str_split(path_simu, "/")[[1]][3], 
+           match = match,
+           mismatch = mismatch,
+           false_positive = false_positive,
+           false_negative = false_negative)
+    
+}
+
+```
+
+
+# run on all the files
+
+```{r run}
+
+ture_list = read_table("data/simulation/true_snp_list")
+colnames(true_list) = c("chro","pos", "ref", "snp")
+
+path_simu_pt1 = str_c("data/simulation/snp_",c("GATK", "BCFtools", "varscan"))
+
+## repeat the experiment for three times
+path_simu = str_c(rep(path_simu_pt1, each = 5),rep(1:5, 3))
+
+result_summary = map_dfr(path_simu, simu_result)
+
+```
+
+# visualize the simulation result
+
+```{r viz}
+
+
+```
