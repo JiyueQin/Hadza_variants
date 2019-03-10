@@ -7,36 +7,42 @@ output: html_document
 
 ```{r setup, include = FALSE}
 library(tidyverse)
+theme_set(theme_bw())
 ```
 
 # define the function to calculate
 
 ```{r calculate}
 
-simu_result = function(path_simu){
+simu_result = function(path_simu, true_list){
    
-    simu_list = read_table(path_simu)
-    colnames(simu_list) = c()
+    simu_list = read.table(path_simu) 
+    colnames(simu_list) = c("chro", "pos", "ref_sim", "snp_sim")
+    simu_list = mutate(simu_list, chro = as.character(chro))
     # match or mismatch
     inner_list = inner_join(true_list, simu_list, by = c("chro","pos"))
-    if (inner_list %>% filter(ref_simu != ref )){print("error")}
+    if (inner_list %>% filter(ref_sim != ref) %>% nrow()>0){print("error")}
     else {
-      match = inner_list %>% filter(ref_snp == simu_snp) %>% nrow()
+      match = inner_list %>% filter(snp == snp_sim) %>% nrow()
       mismatch = inner_list %>% nrow() - match
     }
     
     # false positive
-    fp_list = anti_join(simu_list, ture_list, by = c("chro", "pos"))
+    fp_list = anti_join(simu_list, true_list, by = c("chro", "pos"))
     false_positive = fp_list %>% nrow()
     # false negative
     fn_list = anti_join(true_list, simu_list, by = c("chro", "pos"))
     false_negative = fn_list %>% nrow()
     
-    tibble(file = str_split(path_simu, "/")[[1]][3], 
+    file = str_split(path_simu, "/")[[1]][3]
+    
+    tibble(tool = str_split(file, "_")[[1]][2],
+           depth = str_split(file, "_")[[1]][3],
            match = match,
            mismatch = mismatch,
            false_positive = false_positive,
-           false_negative = false_negative)
+           false_negative = false_negative,
+           total_snp = match + mismatch + false_positive)
     
 }
 
@@ -47,15 +53,18 @@ simu_result = function(path_simu){
 
 ```{r run}
 
-ture_list = read_table("data/simulation/true_snp_list")
+true_list = read.table("data/simulation/no_header_snplist")
 colnames(true_list) = c("chro","pos", "ref", "snp")
+true_list = mutate(true_list, chro = as.character(chro))
 
-path_simu_pt1 = str_c("data/simulation/snp_",c("GATK", "BCFtools", "varscan"))
+path_simu = str_c("data/simulation/snp_",c("GATK", "varscan", "BCFtools"), "_", rep(c(5,10,20,40), each = 3), "x")
 
-## repeat the experiment for three times
-path_simu = str_c(rep(path_simu_pt1, each = 5),rep(1:5, 3))
 
-result_summary = map_dfr(path_simu, simu_result)
+result_summary = map_dfr(path_simu, ~simu_result(.x, true_list)) %>% 
+  mutate(sensitivity = round(match/nrow(true_list), 3),
+         selectivity = round(1-(mismatch + false_positive)/nrow(true_list), 3)) %>% 
+  mutate(depth = factor(depth, levels = c("5x", "10x", "20x", "40x")))
+  
 
 ```
 
@@ -64,4 +73,24 @@ result_summary = map_dfr(path_simu, simu_result)
 ```{r viz}
 
 
+result_summary %>% 
+  ggplot(aes(x = depth, y = sensitivity, group = tool, color = tool)) + 
+  geom_line(size = 1) +
+  geom_point()
+  geom_line(data = result_summary, aes(x = depth , y = selectivity), 
+            linetype = "dashed", size = 1) +
+  geom_point(data = result_summary, aes(x = depth, y = selectivity))
+  
+
+  result_summary %>% 
+    mutate(depth = str_replace(depth, "x", "")) %>% 
+    mutate(depth = as.numeric(depth)) %>% 
+    gather(key = "measure", value = "value", sensitivity, selectivity) %>% 
+    ggplot(aes(x = depth, y = value, color = tool)) + 
+    geom_line(aes(linetype = measure), size = 1.2) + 
+    geom_point(size = 2.5) + 
+    scale_x_continuous(breaks = seq(10, 40, 10),
+                       labels = c("10x", "20x", "30x", "40x")) +
+    theme(legend.position = "bottom")
+  
 ```
